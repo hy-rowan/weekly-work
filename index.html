@@ -61,8 +61,13 @@
     .status-item { padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
     .status-item:hover { opacity: 0.85; }
 
-    /* Add row */
-    .add-row-wrap { }
+    /* 진행중 섹션 */
+    .carried-section { border-bottom: 1px solid #e5e7eb; }
+    .carried-header { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: #fffbeb; border-bottom: 1px solid #fde68a; }
+    .carried-header span { font-size: 11px; font-weight: 600; color: #f59e0b; }
+    .carried-task { display: flex; align-items: center; gap: 8px; padding: 6px 12px; min-height: 34px; background: #fffdf0; border-bottom: 1px solid #fef3c7; }
+    .carried-task:hover { background: #fef9e7; }
+    .carried-from { font-size: 10px; color: #9ca3af; white-space: nowrap; }
     .add-row-btn { display: block; width: 100%; text-align: left; padding: 7px 12px 7px 14px; font-size: 12px; color: #9ca3af; cursor: pointer; background: none; border: none; border-radius: 0 0 8px 8px; }
     .add-row-btn:hover { background: #f9fafb; }
     .add-form { display: none; align-items: center; gap: 8px; padding: 6px 10px; background: #fafaff; border-top: 1px solid #f1f5f9; }
@@ -221,462 +226,46 @@ function makeSubtasks(dk, task) {
   return wrap;
 }
 
-function makeTaskRow(dk, task) {
-  const row = document.createElement("div");
-  row.className = "task-row";
-  row.draggable = true;
-  row.addEventListener("dragstart", () => { dragTaskId = task.id; dragFromDk = dk; });
-  row.addEventListener("dragend", () => { dragTaskId = null; dragFromDk = null; });
+function makeCarriedSection(dk, carriedTasks) {
+  if (!carriedTasks.length) return null;
+  const section = document.createElement("div");
+  section.className = "carried-section";
 
-  const main = document.createElement("div");
-  main.className = "task-main";
+  const hdr = document.createElement("div");
+  hdr.className = "carried-header";
+  hdr.innerHTML = `<span>🔄 이어서 진행 중</span>`;
+  section.appendChild(hdr);
 
-  const handle = document.createElement("span");
-  handle.className = "drag-handle";
-  handle.textContent = "⋮⋮";
+  carriedTasks.forEach(t => {
+    const row = document.createElement("div");
+    row.className = "carried-task";
 
-  const cb = document.createElement("input");
-  cb.type = "checkbox";
-  cb.checked = task.status === "done";
-  cb.style.cssText = "width:14px;height:14px;cursor:pointer;accent-color:#6366f1;flex-shrink:0";
-  cb.addEventListener("change", () => {
-    task.status = cb.checked ? "done" : "todo";
-    text.className = "task-text" + (task.status === "done" ? " done" : "");
-    saveData(data);
-  });
-
-  if (task.product) {
     const prod = document.createElement("span");
     prod.className = "task-product";
-    prod.textContent = task.product;
-    main.appendChild(handle); main.appendChild(cb); main.appendChild(prod);
-  } else {
-    main.appendChild(handle); main.appendChild(cb);
-  }
+    prod.textContent = t.product || "";
+    prod.style.display = t.product ? "" : "none";
 
-  if (task._carried && task._from) {
     const from = document.createElement("span");
-    from.className = "task-from";
-    from.textContent = task._from.slice(5).replace("-", "/");
-    main.appendChild(from);
-  }
+    from.className = "carried-from";
+    from.textContent = t._from?.slice(5).replace("-", "/") || "";
 
-  const text = document.createElement("span");
-  text.className = "task-text" + (task.status === "done" ? " done" : "");
-  text.textContent = task.text;
-  text.title = "더블클릭으로 수정";
-  text.addEventListener("dblclick", () => {
-    text.contentEditable = "true";
-    text.focus();
-    const range = document.createRange();
-    range.selectNodeContents(text);
-    window.getSelection().removeAllRanges();
-    window.getSelection().addRange(range);
-    const finish = () => {
-      text.contentEditable = "false";
-      const newText = text.textContent.trim();
-      if (newText) { task.text = newText; saveData(data); }
-      else text.textContent = task.text;
-    };
-    text.addEventListener("blur", finish, {once: true});
-    text.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); text.blur(); } }, {once: true});
-  });
+    const text = document.createElement("span");
+    text.className = "task-text";
+    text.style.flex = "1";
+    text.textContent = t.text;
 
-  const pill = makeStatusPill(task.status, v => {
-    task.status = v;
-    text.className = "task-text" + (task.status === "done" ? " done" : "");
-    cb.checked = task.status === "done";
-    saveData(data);
-    // pill 업데이트
-    const s = STATUS[v];
-    const btn = pill.querySelector(".status-pill");
-    btn.style.background = s.bg;
-    btn.style.color = s.color;
-    btn.textContent = s.label + " ▾";
-  });
-
-  const del = document.createElement("button");
-  del.className = "del-btn";
-  del.textContent = "✕";
-  del.addEventListener("click", () => {
-    if (!data[dk]) return;
-    data[dk].tasks = data[dk].tasks.filter(t => t.id !== task.id);
-    saveData(data);
-    row.remove();
-  });
-
-  main.appendChild(text); main.appendChild(pill); main.appendChild(del);
-  row.appendChild(main);
-
-  // 메모
-  const memoWrap = document.createElement("div");
-  memoWrap.className = "task-memo";
-  const memoInp = document.createElement("input");
-  memoInp.placeholder = "메모...";
-  memoInp.value = task.memo || "";
-  memoInp.addEventListener("input", () => { task.memo = memoInp.value; saveData(data); });
-  memoWrap.appendChild(memoInp);
-  row.appendChild(memoWrap);
-
-  // 서브태스크
-  row.appendChild(makeSubtasks(dk, task));
-  return row;
-}
-
-function makeDayCard(dk, i) {
-  const tasks = data[dk]?.tasks || [];
-  const isToday = dk === todayKey();
-  const done = tasks.filter(t => t.status === "done").length;
-
-  const card = document.createElement("div");
-  card.className = "day-card" + (isToday ? " today" : "");
-
-  card.addEventListener("dragover", e => { e.preventDefault(); card.classList.add("dragover"); });
-  card.addEventListener("dragleave", e => { if (!card.contains(e.relatedTarget)) card.classList.remove("dragover"); });
-  card.addEventListener("drop", () => {
-    card.classList.remove("dragover");
-    if (!dragTaskId || dragFromDk === dk) return;
-    const fromDay = data[dragFromDk];
-    if (!fromDay) return;
-    const task = fromDay.tasks.find(t => t.id === dragTaskId);
-    if (!task) return;
-    data[dragFromDk].tasks = fromDay.tasks.filter(t => t.id !== dragTaskId);
-    if (!data[dk]) data[dk] = { tasks: [], memo: "" };
-    data[dk].tasks.push({...task, _carried: false, _from: undefined});
-    saveData(data);
-    render();
-  });
-
-  // 헤더
-  const hdr = document.createElement("div");
-  hdr.className = "day-header" + (isToday ? " today-hdr" : "");
-  const title = document.createElement("span");
-  title.className = "day-title";
-  title.textContent = DAY_LABELS[i] + "  " + dk.slice(5).replace("-", "/");
-  hdr.appendChild(title);
-  if (tasks.length > 0) {
-    const badge = document.createElement("span");
-    badge.className = "day-badge";
-    badge.textContent = done + "/" + tasks.length;
-    hdr.appendChild(badge);
-  }
-  card.appendChild(hdr);
-
-  // 업무 목록
-  tasks.forEach(t => card.appendChild(makeTaskRow(dk, t)));
-
-  // 추가 폼
-  const addWrap = document.createElement("div");
-  addWrap.className = "add-row-wrap";
-
-  const form = document.createElement("div");
-  form.className = "add-form";
-
-  const sel = document.createElement("select");
-  ["DEX","H3","BOOM","Platform","etc."].forEach(p => {
-    const o = document.createElement("option"); o.value = p; o.textContent = p; sel.appendChild(o);
-  });
-
-  const inp = document.createElement("input");
-  inp.placeholder = "업무 입력 후 엔터...";
-
-  let formStatus = "todo";
-  const formPill = makeStatusPill(formStatus, v => {
-    formStatus = v;
-    const s = STATUS[v];
-    const btn = formPill.querySelector(".status-pill");
-    btn.style.background = s.bg; btn.style.color = s.color; btn.textContent = s.label + " ▾";
-  });
-
-  const cancelBtn = document.createElement("button");
-  cancelBtn.className = "cancel-btn";
-  cancelBtn.textContent = "✕";
-  cancelBtn.addEventListener("click", () => { form.classList.remove("open"); addBtn.style.display = ""; inp.value = ""; });
-
-  const submit = () => {
-    const text = inp.value.trim();
-    if (!text) return;
-    if (!data[dk]) data[dk] = { tasks: [], memo: "" };
-    const task = { id: uid(), text, product: sel.value, status: formStatus, done: false, memo: "", subs: [] };
-    data[dk].tasks.push(task);
-    saveData(data);
-    card.insertBefore(makeTaskRow(dk, task), addWrap);
-    // badge 업데이트
-    const allTasks = data[dk].tasks;
-    const doneCnt = allTasks.filter(t => t.status === "done").length;
-    let badge = hdr.querySelector(".day-badge");
-    if (!badge) { badge = document.createElement("span"); badge.className = "day-badge"; hdr.appendChild(badge); }
-    badge.textContent = doneCnt + "/" + allTasks.length;
-    inp.value = ""; formStatus = "todo";
-    form.classList.remove("open"); addBtn.style.display = "";
-  };
-
-  inp.addEventListener("keydown", e => {
-    if (e.key === "Enter") { e.preventDefault(); submit(); }
-    if (e.key === "Escape") { form.classList.remove("open"); addBtn.style.display = ""; inp.value = ""; }
-  });
-
-  form.appendChild(sel); form.appendChild(inp); form.appendChild(formPill); form.appendChild(cancelBtn);
-
-  const addBtn = document.createElement("button");
-  addBtn.className = "add-row-btn";
-  addBtn.textContent = "+ 업무 추가";
-  addBtn.addEventListener("click", () => {
-    addBtn.style.display = "none";
-    form.classList.add("open");
-    setTimeout(() => inp.focus(), 0);
-  });
-
-  addWrap.appendChild(form);
-  addWrap.appendChild(addBtn);
-  card.appendChild(addWrap);
-  return card;
-}
-
-function render() {
-  const days = getWeekDays(weekBase);
-  document.getElementById("weekLabel").textContent =
-    days[0].slice(5).replace("-", "/") + " – " + days[4].slice(5).replace("-", "/");
-  const board = document.getElementById("board");
-  board.innerHTML = "";
-  days.forEach((dk, i) => board.appendChild(makeDayCard(dk, i)));
-}
-
-document.getElementById("prevBtn").addEventListener("click", () => {
-  const d = new Date(getWeekDays(weekBase)[0] + "T00:00:00");
-  d.setDate(d.getDate() - 7); weekBase = toKey(d); render();
-});
-document.getElementById("nextBtn").addEventListener("click", () => {
-  const d = new Date(getWeekDays(weekBase)[0] + "T00:00:00");
-  d.setDate(d.getDate() + 7); weekBase = toKey(d); render();
-});
-document.getElementById("todayBtn").addEventListener("click", () => { weekBase = todayKey(); render(); });
-
-carryOver();
-render();
-</script>
-</body>
-</html><!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>📋 주간 업무</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Apple SD Gothic Neo', 'Pretendard', sans-serif; background: #f8fafc; color: #1e293b; }
-    button, input, select, textarea { font-family: inherit; }
-    .wrap { max-width: 700px; margin: 0 auto; padding: 24px 16px; }
-
-    /* Header */
-    .header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
-    .header h1 { font-size: 18px; font-weight: 700; color: #111827; }
-    .btn-nav { border: 1px solid #e5e7eb; background: #f9fafb; border-radius: 6px; padding: 3px 10px; cursor: pointer; color: #6b7280; font-size: 13px; }
-    .btn-today { margin-left: auto; border: none; background: #eef2ff; color: #6366f1; font-weight: 600; font-size: 12px; padding: 4px 12px; border-radius: 6px; cursor: pointer; }
-    .week-label { font-size: 14px; font-weight: 600; color: #374151; }
-
-    /* Day card */
-    .day-card { border: 1.5px solid #e5e7eb; border-radius: 10px; background: #fff; margin-bottom: 10px; }
-    .day-card.today { border-color: #6366f1; }
-    .day-card.dragover { border-color: #6366f1; background: #f5f3ff; }
-    .day-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f9fafb; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e5e7eb; }
-    .day-header.today-hdr { background: #6366f1; }
-    .day-title { font-size: 13px; font-weight: 700; color: #374151; }
-    .today-hdr .day-title { color: #fff; }
-    .day-badge { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 20px; background: #eef2ff; color: #6366f1; }
-    .today-hdr .day-badge { background: rgba(255,255,255,0.2); color: #fff; }
-
-    /* Task */
-    .task-row { border-bottom: 1px solid #f8fafc; }
-    .task-main { display: flex; align-items: center; gap: 8px; padding: 7px 12px; min-height: 38px; }
-    .task-main:hover { background: #fafafa; }
-    .drag-handle { color: #cbd5e1; font-size: 12px; cursor: grab; flex-shrink: 0; }
-    .task-product { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: #f1f5f9; color: #475569; white-space: nowrap; }
-    .task-from { font-size: 10px; color: #9ca3af; white-space: nowrap; }
-    .task-text { flex: 1; font-size: 13px; color: #1e293b; cursor: text; word-break: break-all; }
-    .task-text.done { text-decoration: line-through; color: #9ca3af; }
-    .del-btn { background: none; border: none; cursor: pointer; color: #e2e8f0; font-size: 13px; padding: 0 2px; flex-shrink: 0; }
-    .del-btn:hover { color: #94a3b8; }
-
-    /* Memo */
-    .task-memo { padding: 0 12px 4px 44px; }
-    .task-memo input { width: 100%; border: none; border-bottom: 1px solid #f1f5f9; outline: none; font-size: 12px; color: #6b7280; background: transparent; padding: 2px 0; }
-    .task-memo input::placeholder { color: #cbd5e1; }
-
-    /* Subtasks */
-    .subtasks { padding: 0 12px 6px 44px; }
-    .sub-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; min-height: 26px; }
-    .sub-sym { color: #d1d5db; font-size: 11px; flex-shrink: 0; }
-    .sub-text { font-size: 12px; flex: 1; color: #374151; }
-    .sub-text.done { text-decoration: line-through; color: #9ca3af; }
-    .add-sub-btn { background: none; border: none; cursor: pointer; font-size: 11px; color: #9ca3af; padding: 2px 0; }
-    .add-sub-btn:hover { color: #6366f1; }
-
-    /* Status pill */
-    .pill-wrap { position: relative; }
-    .status-pill { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; cursor: pointer; white-space: nowrap; border: none; }
-    .status-menu { position: fixed; z-index: 9999; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); min-width: 90px; padding: 4px 0; }
-    .status-item { padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
-    .status-item:hover { opacity: 0.85; }
-
-    /* Add row */
-    .add-row-wrap { }
-    .add-row-btn { display: block; width: 100%; text-align: left; padding: 7px 12px 7px 14px; font-size: 12px; color: #9ca3af; cursor: pointer; background: none; border: none; border-radius: 0 0 8px 8px; }
-    .add-row-btn:hover { background: #f9fafb; }
-    .add-form { display: none; align-items: center; gap: 8px; padding: 6px 10px; background: #fafaff; border-top: 1px solid #f1f5f9; }
-    .add-form.open { display: flex; }
-    .add-form input { flex: 1; border: none; outline: none; font-size: 13px; color: #374151; background: transparent; }
-    .add-form select { font-size: 11px; border: 1px solid #e5e7eb; border-radius: 5px; padding: 2px 4px; color: #374151; outline: none; cursor: pointer; }
-    .add-form .cancel-btn { background: none; border: none; color: #d1d5db; cursor: pointer; font-size: 14px; }
-  </style>
-</head>
-<body>
-<div class="wrap">
-  <div class="header">
-    <h1>📋 주간 업무</h1>
-    <button class="btn-nav" id="prevBtn">←</button>
-    <span class="week-label" id="weekLabel"></span>
-    <button class="btn-nav" id="nextBtn">→</button>
-    <button class="btn-today" id="todayBtn">이번 주</button>
-  </div>
-  <div id="board"></div>
-</div>
-
-<script>
-const STATUS = {
-  todo:       { label: "예정",   color: "#6b7280", bg: "#f3f4f6" },
-  inprogress: { label: "진행중", color: "#6366f1", bg: "#eef2ff" },
-  done:       { label: "완료",   color: "#22c55e", bg: "#f0fdf4" },
-  hold:       { label: "보류",   color: "#f59e0b", bg: "#fffbeb" },
-};
-const DAY_LABELS = ["월","화","수","목","금"];
-let _id = Date.now();
-const uid = () => String(++_id);
-const toKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-const todayKey = () => toKey(new Date());
-
-function getWeekDays(base) {
-  const d = new Date(base + "T00:00:00"), mon = new Date(d);
-  mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return Array.from({length: 5}, (_, i) => {
-    const dd = new Date(mon); dd.setDate(mon.getDate() + i); return toKey(dd);
-  });
-}
-
-function loadData() { try { return JSON.parse(localStorage.getItem("wj_v2") || "{}"); } catch { return {}; } }
-function saveData(d) { try { localStorage.setItem("wj_v2", JSON.stringify(d)); } catch {} }
-
-let data = loadData();
-let weekBase = todayKey();
-let dragTaskId = null, dragFromDk = null;
-let openMenu = null;
-
-// 자동 이월
-function carryOver() {
-  const tk = todayKey();
-  Object.entries(data).forEach(([dk, day]) => {
-    if (dk >= tk) return;
-    const incomplete = (day.tasks||[]).filter(t => t.status !== "done" && t.status !== "hold" && !t._carried);
-    if (!incomplete.length) return;
-    const todayDay = data[tk] || { tasks: [], memo: "" };
-    const alreadyCarried = todayDay.tasks.filter(t => t._carried && incomplete.some(o => o.text === t.text));
-    if (!alreadyCarried.length) {
-      const carried = incomplete.map(t => ({...t, id: uid(), _carried: true, _from: dk}));
-      data[dk] = {...day, tasks: day.tasks.map(t => incomplete.find(i => i.id === t.id) ? {...t, _carried: true} : t)};
-      data[tk] = {...todayDay, tasks: [...carried, ...todayDay.tasks]};
-    }
-  });
-  saveData(data);
-}
-
-function closeMenu() {
-  if (openMenu) { openMenu.remove(); openMenu = null; }
-}
-document.addEventListener("click", closeMenu);
-
-function makeStatusPill(status, onChange) {
-  const wrap = document.createElement("div");
-  wrap.className = "pill-wrap";
-  const s = STATUS[status || "todo"];
-  const btn = document.createElement("button");
-  btn.className = "status-pill";
-  btn.style.background = s.bg;
-  btn.style.color = s.color;
-  btn.textContent = s.label + " ▾";
-  btn.addEventListener("click", e => {
-    e.stopPropagation();
-    closeMenu();
-    const menu = document.createElement("div");
-    menu.className = "status-menu";
-    Object.entries(STATUS).forEach(([k, v]) => {
-      const item = document.createElement("div");
-      item.className = "status-item";
-      item.style.color = v.color;
-      item.style.background = status === k ? v.bg : "";
-      item.textContent = v.label;
-      item.addEventListener("click", ev => { ev.stopPropagation(); onChange(k); closeMenu(); });
-      menu.appendChild(item);
-    });
-    const rect = btn.getBoundingClientRect();
-    menu.style.top = (rect.bottom + 4) + "px";
-    menu.style.left = rect.left + "px";
-    document.body.appendChild(menu);
-    openMenu = menu;
-  });
-  wrap.appendChild(btn);
-  return wrap;
-}
-
-function makeSubtasks(dk, task) {
-  const wrap = document.createElement("div");
-  wrap.className = "subtasks";
-  task.subs = task.subs || [];
-
-  function render() {
-    wrap.innerHTML = "";
-    task.subs.forEach(s => {
-      const row = document.createElement("div");
-      row.className = "sub-row";
-      const sym = document.createElement("span");
-      sym.className = "sub-sym";
-      sym.textContent = "└";
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.checked = s.done;
-      cb.style.cssText = "width:12px;height:12px;cursor:pointer;accent-color:#6366f1;flex-shrink:0";
-      cb.addEventListener("change", () => { s.done = cb.checked; saveData(data); render(); });
-      const txt = document.createElement("span");
-      txt.className = "sub-text" + (s.done ? " done" : "");
-      txt.textContent = s.text;
-      const del = document.createElement("button");
-      del.className = "del-btn";
-      del.textContent = "✕";
-      del.addEventListener("click", () => { task.subs = task.subs.filter(x => x.id !== s.id); saveData(data); render(); });
-      row.appendChild(sym); row.appendChild(cb); row.appendChild(txt); row.appendChild(del);
-      wrap.appendChild(row);
+    const pill = makeStatusPill(t.status, v => {
+      t.status = v; saveData(data); render();
     });
 
-    const addBtn = document.createElement("button");
-    addBtn.className = "add-sub-btn";
-    addBtn.textContent = "+ 하위 업무";
-    addBtn.addEventListener("click", () => {
-      const inp = document.createElement("input");
-      inp.placeholder = "하위 업무 입력...";
-      inp.style.cssText = "border:none;border-bottom:1px solid #e5e7eb;outline:none;font-size:12px;font-family:inherit;color:#374151;background:transparent;padding:1px 0;width:200px;margin-left:18px";
-      addBtn.replaceWith(inp);
-      inp.focus();
-      const commit = () => {
-        const t = inp.value.trim();
-        if (t) { task.subs.push({id: uid(), text: t, done: false}); saveData(data); }
-        render();
-      };
-      inp.addEventListener("blur", commit);
-      inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } if (e.key === "Escape") render(); });
-    });
-    wrap.appendChild(addBtn);
-  }
-  render();
-  return wrap;
+    if (t.product) row.appendChild(prod);
+    row.appendChild(from);
+    row.appendChild(text);
+    row.appendChild(pill);
+    section.appendChild(row);
+  });
+
+  return section;
 }
 
 function makeTaskRow(dk, task) {
@@ -820,8 +409,15 @@ function makeDayCard(dk, i) {
   }
   card.appendChild(hdr);
 
-  // 업무 목록
-  tasks.forEach(t => card.appendChild(makeTaskRow(dk, t)));
+  // 진행중 섹션 (이월된 업무 따로 표시)
+  const carriedTasks = (data[dk]?.tasks || []).filter(t => t._carried);
+  const normalTasks = (data[dk]?.tasks || []).filter(t => !t._carried);
+
+  const carried = makeCarriedSection(dk, carriedTasks);
+  if (carried) card.appendChild(carried);
+
+  // 일반 업무 목록
+  normalTasks.forEach(t => card.appendChild(makeTaskRow(dk, t)));
 
   // 추가 폼
   const addWrap = document.createElement("div");
