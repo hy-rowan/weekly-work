@@ -449,8 +449,9 @@ function makeDayCard(dk, i) {
   card.appendChild(hdr);
 
   // 진행중 섹션 (이월된 업무 따로 표시)
-  const carriedTasks = (data[dk]?.tasks || []).filter(t => t._carried);
-  const normalTasks = (data[dk]?.tasks || []).filter(t => !t._carried);
+  const allTasks = (data[dk] && data[dk].tasks) ? data[dk].tasks : [];
+  const carriedTasks = allTasks.filter(t => t._carried);
+  const normalTasks = allTasks.filter(t => !t._carried);
 
   const carried = makeCarriedSection(dk, carriedTasks);
   if (carried) card.appendChild(carried);
