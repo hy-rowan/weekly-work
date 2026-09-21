@@ -253,9 +253,12 @@ function makeCarriedSection(dk, carriedTasks) {
     row.addEventListener("dragstart", () => { dragTaskId = t.id; dragFromDk = dk; });
     row.addEventListener("dragend", () => { dragTaskId = null; dragFromDk = null; });
 
-    const handle = document.createElement("span");
-    handle.className = "drag-handle";
-    handle.textContent = "⋮⋮";
+    const prod = document.createElement("span");
+    prod.className = "task-product";
+    prod.textContent = t.product || "";
+    prod.style.display = t.product ? "" : "none";
+
+    const from = document.createElement("span");
     prod.className = "task-product";
     prod.textContent = t.product || "";
     prod.style.display = t.product ? "" : "none";
@@ -285,6 +288,10 @@ function makeCarriedSection(dk, carriedTasks) {
     const pill = makeStatusPill(t.status, v => {
       t.status = v; saveData(data); render();
     });
+
+    const handle = document.createElement("span");
+    handle.className = "drag-handle";
+    handle.textContent = "⋮⋮";
 
     if (t.product) row.appendChild(prod);
     row.appendChild(handle);
