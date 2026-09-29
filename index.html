@@ -17,18 +17,25 @@
     .day-card { border: 1.5px solid #e5e7eb; border-radius: 10px; background: #fff; margin-bottom: 10px; }
     .day-card.today { border-color: #6366f1; }
     .day-card.dragover { border-color: #6366f1; background: #f5f3ff; }
-    .day-card.disabled { opacity: 0.5; pointer-events: none; }
-    .day-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f9fafb; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e5e7eb; pointer-events: auto; }
+    .day-card.disabled > :not(.day-header) { opacity: 0.5; pointer-events: none; }
+    .day-card.disabled { background: #f9fafb; }
+    .day-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f9fafb; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e5e7eb; }
+    .day-card.disabled .day-header { border-bottom: none; border-radius: 8px; }
     .day-header.today-hdr { background: #6366f1; }
     .day-title { font-size: 13px; font-weight: 700; color: #374151; }
     .today-hdr .day-title { color: #fff; }
     .day-badge { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 20px; background: #eef2ff; color: #6366f1; }
     .today-hdr .day-badge { background: rgba(255,255,255,0.2); color: #fff; }
-    .day-off-badge { font-size: 11px; font-weight: 600; color: #9ca3af; margin-left: 4px; }
-    .today-hdr .day-off-badge { color: rgba(255,255,255,0.8); }
-    .vacation-btn { font-size: 10px; font-weight: 600; border: 1px solid #e5e7eb; background: transparent; color: #9ca3af; border-radius: 5px; padding: 2px 7px; cursor: pointer; margin-left: auto; pointer-events: auto; }
-    .today-hdr .vacation-btn { border-color: rgba(255,255,255,0.4); color: #fff; }
-    .vacation-input { font-size: 11px; border: none; border-bottom: 1px solid #e5e7eb; outline: none; background: transparent; color: #6b7280; width: 80px; margin-left: auto; pointer-events: auto; }
+    .day-off-badge { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 20px; background: #fef3c7; color: #b45309; }
+    .today-hdr .day-off-badge { background: rgba(255,255,255,0.9); color: #b45309; }
+    /* 휴가 버튼: 평소엔 숨김, 해당 날짜에 마우스를 올렸을 때만 표시 */
+    .vacation-btn { font-size: 10px; font-weight: 600; border: 1px dashed #d1d5db; background: transparent; color: #9ca3af; border-radius: 5px; padding: 2px 7px; cursor: pointer; margin-left: auto; opacity: 0; transition: opacity .15s; }
+    .day-header:hover .vacation-btn, .vacation-btn:focus-visible { opacity: 1; }
+    .vacation-btn.clear { opacity: 1; border-style: solid; }
+    .today-hdr .vacation-btn { border-color: rgba(255,255,255,0.5); color: #fff; }
+    .vacation-input { font-size: 11px; border: none; border-bottom: 1px solid #e5e7eb; outline: none; background: transparent; color: #6b7280; width: 100px; margin-left: auto; }
+    .today-hdr .vacation-input { color: #fff; border-bottom-color: rgba(255,255,255,0.6); }
+    .today-hdr .vacation-input::placeholder { color: rgba(255,255,255,0.7); }
     .carried-section { border-bottom: 1px solid #e5e7eb; }
     .carried-header { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: #fffbeb; border-bottom: 1px solid #fde68a; }
     .carried-header span { font-size: 11px; font-weight: 600; color: #f59e0b; }
@@ -42,7 +49,7 @@
     .task-main:hover { background: #fafafa; }
     .drag-handle { color: #cbd5e1; font-size: 12px; cursor: grab; flex-shrink: 0; }
     .task-product { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: #f1f5f9; color: #475569; white-space: nowrap; }
-    .task-from { font-size: 10px; color: #9ca3af; white-space: nowrap; }
+    .carry-tag { font-size: 10px; color: #f59e0b; white-space: nowrap; }
     .task-text { flex: 1; font-size: 13px; color: #1e293b; cursor: text; word-break: break-all; }
     .task-text.done { text-decoration: line-through; color: #9ca3af; }
     .del-btn { background: none; border: none; cursor: pointer; color: #e2e8f0; font-size: 13px; padding: 0 2px; flex-shrink: 0; }
@@ -93,6 +100,7 @@ let _id = Date.now();
 const uid = () => String(++_id);
 const toKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const todayKey = () => toKey(new Date());
+const fmt = dk => dk.slice(5).replace("-", "/");
 
 function getWeekDays(base) {
   const d = new Date(base + "T00:00:00"), mon = new Date(d);
@@ -110,22 +118,67 @@ let weekBase = todayKey();
 let dragTaskId = null, dragFromDk = null;
 let openMenu = null;
 
-function carryOver() {
-  const tk = todayKey();
-  Object.entries(data).forEach(([dk, day]) => {
-    if (dk >= tk) return;
-    const tasks = day.tasks || [];
-    const incomplete = tasks.filter(t => t.status !== "done" && t.status !== "hold" && !t._carried);
-    if (!incomplete.length) return;
-    const todayDay = data[tk] || { tasks: [], memo: "" };
-    const alreadyCarried = todayDay.tasks.filter(t => t._carried && incomplete.some(o => o.text === t.text));
-    if (!alreadyCarried.length) {
-      const carried = incomplete.map(t => ({...t, id: uid(), _carried: true, _from: dk}));
-      data[dk] = {...day, tasks: tasks.map(t => incomplete.find(i => i.id === t.id) ? {...t, _carried: true} : t)};
-      data[tk] = {...todayDay, tasks: [...carried, ...todayDay.tasks]};
-    }
+/*
+ * 이월 모델
+ *  _thread : 같은 업무(원본 + 이월본)를 묶는 ID
+ *  _from   : 이월본일 때, 어느 날짜에서 넘어왔는지
+ *  _out    : 이미 다음 날로 이월된 업무
+ */
+function eachTask(fn) {
+  Object.entries(data).forEach(([dk, day]) => (day.tasks || []).forEach(t => fn(dk, t)));
+}
+
+function migrate() {
+  // 이전 버전(_carried) → 새 필드로 변환
+  eachTask((dk, t) => {
+    if (t._carried === undefined) return;
+    if (!t._from && t._carried) t._out = true;
+    delete t._carried;
+  });
+  // 이월본과 원본을 스레드로 연결
+  eachTask((dk, t) => {
+    if (!t._from || t._thread) return;
+    const src = ((data[t._from] || {}).tasks || []).find(o => o.id !== t.id && (o.id === t._origId || o.text === t.text));
+    if (src) { src._thread = src._thread || src.id; t._thread = src._thread; }
+    else t._thread = t.id;
+  });
+  // 같은 스레드는 가장 최근 날짜의 상태로 맞춤 (기존에 완료된 이월 업무 반영)
+  const groups = {};
+  eachTask((dk, t) => { if (t._thread) (groups[t._thread] = groups[t._thread] || []).push([dk, t]); });
+  Object.values(groups).forEach(g => {
+    g.sort((a, b) => a[0].localeCompare(b[0]));
+    const latest = g[g.length - 1][1].status;
+    g.forEach(([, t]) => { t.status = latest; });
   });
   saveData(data);
+}
+
+function carryOver() {
+  const tk = todayKey();
+  if (!data[tk]) data[tk] = { tasks: [], memo: "" };
+  if (data[tk].dayOff) return; // 오늘이 휴가면 이월하지 않음
+  const incoming = [];
+  Object.keys(data).sort().forEach(dk => {
+    if (dk >= tk) return;
+    (data[dk].tasks || []).forEach(t => {
+      if (t._out || t.status === "done" || t.status === "hold") return;
+      t._thread = t._thread || t.id;
+      t._out = true;
+      const exists = data[tk].tasks.some(x => x._thread === t._thread) || incoming.some(x => x._thread === t._thread);
+      if (exists) return;
+      incoming.push({ ...t, id: uid(), _from: dk, _origId: t.id, _out: false, subs: (t.subs || []).map(s => ({...s})) });
+    });
+  });
+  data[tk].tasks = [...incoming, ...data[tk].tasks];
+  saveData(data);
+}
+
+// 상태 변경 시 같은 스레드(전날 원본 ↔ 이월본) 모두 동기화
+function setStatus(task, status) {
+  task.status = status;
+  if (task._thread) eachTask((dk, t) => { if (t._thread === task._thread) t.status = status; });
+  saveData(data);
+  render();
 }
 
 function closeMenu() { if (openMenu) { openMenu.remove(); openMenu = null; } }
@@ -153,12 +206,12 @@ function makeStatusPill(status, onChange) {
       item.textContent = v.label;
       item.addEventListener("click", ev => {
         ev.stopPropagation();
-        onChange(k);
         btn.style.background = STATUS[k].bg;
         btn.style.color = STATUS[k].color;
         btn.textContent = STATUS[k].label + " ▾";
         status = k;
         closeMenu();
+        onChange(k);
       });
       menu.appendChild(item);
     });
@@ -214,6 +267,20 @@ function makeSubtasks(dk, task) {
   return wrap;
 }
 
+function makeEditableText(task, el) {
+  el.title = "더블클릭으로 수정";
+  el.addEventListener("dblclick", () => {
+    el.contentEditable = "true"; el.focus();
+    const finish = () => {
+      el.contentEditable = "false";
+      const v = el.textContent.trim();
+      if (v) { task.text = v; saveData(data); } else el.textContent = task.text;
+    };
+    el.addEventListener("blur", finish, {once: true});
+    el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } }, {once: true});
+  });
+}
+
 function makeCarriedSection(dk, carriedTasks) {
   if (!carriedTasks.length) return null;
   const section = document.createElement("div");
@@ -233,32 +300,23 @@ function makeCarriedSection(dk, carriedTasks) {
     const handle = document.createElement("span");
     handle.className = "drag-handle"; handle.textContent = "⋮⋮";
 
-    const prodEl = document.createElement("span");
-    prodEl.className = "task-product"; prodEl.textContent = t.product || "";
-    prodEl.style.display = t.product ? "" : "none";
-
     const fromEl = document.createElement("span");
     fromEl.className = "carried-from";
-    fromEl.textContent = t._from ? t._from.slice(5).replace("-", "/") : "";
+    fromEl.textContent = t._from ? fmt(t._from) : "";
 
     const textEl = document.createElement("span");
-    textEl.className = "task-text"; textEl.style.flex = "1"; textEl.textContent = t.text;
-    textEl.title = "더블클릭으로 수정";
-    textEl.addEventListener("dblclick", () => {
-      textEl.contentEditable = "true"; textEl.focus();
-      const finish = () => {
-        textEl.contentEditable = "false";
-        const v = textEl.textContent.trim();
-        if (v) { t.text = v; saveData(data); } else textEl.textContent = t.text;
-      };
-      textEl.addEventListener("blur", finish, {once: true});
-      textEl.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); textEl.blur(); } }, {once: true});
-    });
+    textEl.className = "task-text" + (t.status === "done" ? " done" : "");
+    textEl.style.flex = "1"; textEl.textContent = t.text;
+    makeEditableText(t, textEl);
 
-    const pill = makeStatusPill(t.status, v => { t.status = v; saveData(data); });
+    const pill = makeStatusPill(t.status, v => setStatus(t, v));
 
     row.appendChild(handle);
-    if (t.product) row.appendChild(prodEl);
+    if (t.product) {
+      const prodEl = document.createElement("span");
+      prodEl.className = "task-product"; prodEl.textContent = t.product;
+      row.appendChild(prodEl);
+    }
     row.appendChild(fromEl);
     row.appendChild(textEl);
     row.appendChild(pill);
@@ -295,36 +353,18 @@ function makeTaskRow(dk, task) {
 
   const textEl = document.createElement("span");
   textEl.className = "task-text" + (task.status === "done" ? " done" : "");
-  textEl.textContent = task.text; textEl.title = "더블클릭으로 수정";
-  textEl.addEventListener("dblclick", () => {
-    textEl.contentEditable = "true"; textEl.focus();
-    const finish = () => {
-      textEl.contentEditable = "false";
-      const v = textEl.textContent.trim();
-      if (v) { task.text = v; saveData(data); } else textEl.textContent = task.text;
-    };
-    textEl.addEventListener("blur", finish, {once: true});
-    textEl.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); textEl.blur(); } }, {once: true});
-  });
+  textEl.textContent = task.text;
+  makeEditableText(task, textEl);
 
-  cb.addEventListener("change", () => {
-    task.status = cb.checked ? "done" : "todo";
-    textEl.className = "task-text" + (task.status === "done" ? " done" : "");
-    saveData(data);
-  });
+  cb.addEventListener("change", () => setStatus(task, cb.checked ? "done" : (task._out ? "inprogress" : "todo")));
 
-  const pill = makeStatusPill(task.status, v => {
-    task.status = v;
-    textEl.className = "task-text" + (task.status === "done" ? " done" : "");
-    cb.checked = task.status === "done";
-    saveData(data);
-  });
+  const pill = makeStatusPill(task.status, v => setStatus(task, v));
 
   const del = document.createElement("button");
   del.className = "del-btn"; del.textContent = "✕";
   del.addEventListener("click", () => {
     if (data[dk]) data[dk].tasks = data[dk].tasks.filter(t => t.id !== task.id);
-    saveData(data); row.remove();
+    saveData(data); render();
   });
 
   main.appendChild(handle); main.appendChild(cb);
@@ -333,7 +373,14 @@ function makeTaskRow(dk, task) {
     prodEl.className = "task-product"; prodEl.textContent = task.product;
     main.appendChild(prodEl);
   }
-  main.appendChild(textEl); main.appendChild(pill); main.appendChild(del);
+  main.appendChild(textEl);
+  if (task._out) {
+    const tag = document.createElement("span");
+    tag.className = "carry-tag"; tag.textContent = "→ 이월됨";
+    tag.title = "다음 날로 이어서 진행 중인 업무 · 상태가 함께 바뀌어요";
+    main.appendChild(tag);
+  }
+  main.appendChild(pill); main.appendChild(del);
   row.appendChild(main);
 
   const memoWrap = document.createElement("div");
@@ -358,29 +405,29 @@ function makeDayCard(dk, i) {
   const card = document.createElement("div");
   card.className = "day-card" + (isToday ? " today" : "") + (isDisabled ? " disabled" : "");
 
-  card.addEventListener("dragover", e => { e.preventDefault(); card.classList.add("dragover"); });
+  card.addEventListener("dragover", e => { if (isDisabled) return; e.preventDefault(); card.classList.add("dragover"); });
   card.addEventListener("dragleave", e => { if (!card.contains(e.relatedTarget)) card.classList.remove("dragover"); });
   card.addEventListener("drop", () => {
     card.classList.remove("dragover");
-    if (!dragTaskId || dragFromDk === dk) return;
+    if (isDisabled || !dragTaskId || dragFromDk === dk) return;
     const fromDay = data[dragFromDk];
     if (!fromDay) return;
     const task = (fromDay.tasks || []).find(t => t.id === dragTaskId);
     if (!task) return;
     data[dragFromDk].tasks = (fromDay.tasks || []).filter(t => t.id !== dragTaskId);
     if (!data[dk]) data[dk] = { tasks: [], memo: "" };
-    data[dk].tasks.push({...task, _carried: false, _from: undefined});
+    const moved = {...task, _out: false}; delete moved._from; delete moved._origId;
+    data[dk].tasks.push(moved);
     saveData(data); render();
   });
 
   // 헤더
   const hdr = document.createElement("div");
   hdr.className = "day-header" + (isToday ? " today-hdr" : "");
-  hdr.style.pointerEvents = "auto";
 
   const titleEl = document.createElement("span");
   titleEl.className = "day-title";
-  titleEl.textContent = DAY_LABELS[i] + "  " + dk.slice(5).replace("-", "/");
+  titleEl.textContent = DAY_LABELS[i] + "  " + fmt(dk);
   hdr.appendChild(titleEl);
 
   if (!isDisabled && tasks.length > 0) {
@@ -393,15 +440,14 @@ function makeDayCard(dk, i) {
   if (isDisabled) {
     const offBadge = document.createElement("span");
     offBadge.className = "day-off-badge";
-    offBadge.textContent = dayOff;
+    offBadge.textContent = "🌴 " + dayOff;
     hdr.appendChild(offBadge);
   }
 
-  // 휴가 버튼
+  // 휴가 버튼: 휴가인 날엔 '해제'만 보이고, 평소엔 마우스를 올렸을 때만 '+ 휴가' 노출
   const vacBtn = document.createElement("button");
-  vacBtn.className = "vacation-btn";
-  vacBtn.style.marginLeft = isDisabled ? "" : "auto";
-  vacBtn.textContent = isDisabled ? "✕ 해제" : "휴가";
+  vacBtn.className = "vacation-btn" + (isDisabled ? " clear" : "");
+  vacBtn.textContent = isDisabled ? "✕ 해제" : "+ 휴가";
   vacBtn.addEventListener("click", e => {
     e.stopPropagation();
     if (!data[dk]) data[dk] = { tasks: [], memo: "" };
@@ -411,17 +457,18 @@ function makeDayCard(dk, i) {
     } else {
       const inp = document.createElement("input");
       inp.className = "vacation-input";
-      inp.placeholder = "연차 / 공휴일...";
+      inp.placeholder = "연차 / 반차 / 공휴일";
       vacBtn.replaceWith(inp); inp.focus();
+      let cancelled = false;
       const commit = () => {
-        if (!data[dk]) data[dk] = { tasks: [], memo: "" };
+        if (cancelled) return;
         data[dk].dayOff = inp.value.trim() || "연차";
         saveData(data); render();
       };
       inp.addEventListener("blur", commit);
       inp.addEventListener("keydown", e2 => {
         if (e2.key === "Enter") { e2.preventDefault(); inp.blur(); }
-        if (e2.key === "Escape") render();
+        if (e2.key === "Escape") { cancelled = true; render(); }
       });
     }
   });
@@ -429,8 +476,8 @@ function makeDayCard(dk, i) {
   card.appendChild(hdr);
 
   if (!isDisabled) {
-    const carried = tasks.filter(t => t._carried);
-    const normal = tasks.filter(t => !t._carried);
+    const carried = tasks.filter(t => t._from);
+    const normal = tasks.filter(t => !t._from);
     const carriedSection = makeCarriedSection(dk, carried);
     if (carriedSection) card.appendChild(carriedSection);
     normal.forEach(t => card.appendChild(makeTaskRow(dk, t)));
@@ -462,14 +509,7 @@ function makeDayCard(dk, i) {
       const task = { id: uid(), text: txt, product: sel.value, status: formStatus, done: false, memo: "", subs: [] };
       data[dk].tasks.push(task);
       saveData(data);
-      card.insertBefore(makeTaskRow(dk, task), addWrap);
-      const allT = data[dk].tasks;
-      const doneCnt = allT.filter(t => t.status === "done").length;
-      let badge = hdr.querySelector(".day-badge");
-      if (!badge) { badge = document.createElement("span"); badge.className = "day-badge"; titleEl.after(badge); }
-      badge.textContent = doneCnt + "/" + allT.length;
-      inp.value = ""; formStatus = "todo";
-      form.classList.remove("open"); addBtn.style.display = "";
+      render();
     };
 
     inp.addEventListener("keydown", e => {
@@ -495,9 +535,9 @@ function makeDayCard(dk, i) {
 }
 
 function render() {
+  closeMenu();
   const days = getWeekDays(weekBase);
-  document.getElementById("weekLabel").textContent =
-    days[0].slice(5).replace("-", "/") + " – " + days[4].slice(5).replace("-", "/");
+  document.getElementById("weekLabel").textContent = fmt(days[0]) + " – " + fmt(days[4]);
   const board = document.getElementById("board");
   board.innerHTML = "";
   days.forEach((dk, i) => board.appendChild(makeDayCard(dk, i)));
@@ -513,6 +553,7 @@ document.getElementById("nextBtn").addEventListener("click", () => {
 });
 document.getElementById("todayBtn").addEventListener("click", () => { weekBase = todayKey(); render(); });
 
+migrate();
 carryOver();
 render();
 </script>
