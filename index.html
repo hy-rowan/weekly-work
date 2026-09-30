@@ -75,6 +75,16 @@
     .add-form input { flex: 1; border: none; outline: none; font-size: 13px; color: #374151; background: transparent; }
     .add-form select { font-size: 11px; border: 1px solid #e5e7eb; border-radius: 5px; padding: 2px 4px; color: #374151; outline: none; cursor: pointer; }
     .cancel-btn { background: none; border: none; color: #d1d5db; cursor: pointer; font-size: 14px; }
+    /* 내보내기 / 불러오기 */
+    .backup-group { display: flex; gap: 4px; margin-left: 6px; padding-left: 10px; border-left: 1px solid #e5e7eb; }
+    .btn-backup { border: 1px solid #e5e7eb; background: #fff; color: #6b7280; font-weight: 600; font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+    .btn-backup:hover { border-color: #c7d2fe; color: #6366f1; background: #f5f3ff; }
+    .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #111827; color: #fff; font-size: 13px; padding: 8px 16px; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.18); z-index: 10000; opacity: 0; transition: opacity .2s; pointer-events: none; }
+    .toast.show { opacity: 1; }
+    @media (max-width: 520px) {
+      .header { flex-wrap: wrap; }
+      .backup-group { margin-left: auto; border-left: none; padding-left: 0; }
+    }
   </style>
 </head>
 <body>
@@ -85,6 +95,11 @@
     <span class="week-label" id="weekLabel"></span>
     <button class="btn-nav" id="nextBtn">→</button>
     <button class="btn-today" id="todayBtn">이번 주</button>
+    <div class="backup-group">
+      <button class="btn-backup" id="exportBtn" title="모든 업무 데이터를 파일로 저장">내보내기</button>
+      <button class="btn-backup" id="importBtn" title="백업 파일에서 데이터 불러오기">불러오기</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden />
+    </div>
   </div>
   <div id="board"></div>
 </div>
@@ -552,6 +567,53 @@ document.getElementById("nextBtn").addEventListener("click", () => {
   d.setDate(d.getDate() + 7); weekBase = toKey(d); render();
 });
 document.getElementById("todayBtn").addEventListener("click", () => { weekBase = todayKey(); render(); });
+
+/* ── 내보내기 / 불러오기 ── */
+function showToast(msg) {
+  let el = document.getElementById("toast");
+  if (!el) { el = document.createElement("div"); el.id = "toast"; el.className = "toast"; document.body.appendChild(el); }
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove("show"), 2500);
+}
+
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const backup = { app: "weekly-work", version: 2, exportedAt: new Date().toISOString(), data };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `weekly-work-backup-${todayKey()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast("백업 파일을 저장했어요");
+});
+
+const importFile = document.getElementById("importFile");
+document.getElementById("importBtn").addEventListener("click", () => importFile.click());
+importFile.addEventListener("change", () => {
+  const file = importFile.files[0];
+  importFile.value = "";
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed;
+    try { parsed = JSON.parse(reader.result); } catch { showToast("백업 파일을 읽을 수 없어요"); return; }
+    // 이 앱의 백업 형식({ data: {...} }) 또는 localStorage 원본({ "YYYY-MM-DD": {...} }) 모두 허용
+    const incoming = parsed && typeof parsed === "object" && parsed.data && typeof parsed.data === "object" ? parsed.data : parsed;
+    const valid = incoming && typeof incoming === "object" && !Array.isArray(incoming)
+      && Object.keys(incoming).every(k => /^\d{4}-\d{2}-\d{2}$/.test(k));
+    if (!valid) { showToast("주간 업무 백업 파일이 아니에요"); return; }
+    const days = Object.keys(incoming).length;
+    if (!confirm(`백업 파일(${days}일치)을 불러올까요?\n지금 화면의 데이터는 백업 내용으로 바뀝니다.`)) return;
+    data = incoming;
+    migrate();
+    carryOver();
+    saveData(data);
+    weekBase = todayKey();
+    render();
+    showToast("데이터를 불러왔어요");
+  };
+  reader.readAsText(file);
+});
 
 migrate();
 carryOver();
